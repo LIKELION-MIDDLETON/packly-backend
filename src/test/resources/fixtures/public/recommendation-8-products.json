@@ -1,0 +1,14 @@
+{
+  "id": "00000000-0000-0000-0000-000000000002",
+  "analysisId": "00000000-0000-0000-0000-000000000001",
+  "products": [
+    {"id":"10000000-0000-0000-0000-000000000001","order":1,"displayOrder":1,"applicationOrder":1,"slot":"토너","usageGroup":"CORE_ROUTINE"},
+    {"id":"10000000-0000-0000-0000-000000000002","order":2,"displayOrder":2,"applicationOrder":2,"slot":"로션","usageGroup":"CORE_ROUTINE"},
+    {"id":"10000000-0000-0000-0000-000000000003","order":3,"displayOrder":3,"applicationOrder":3,"slot":"논코메도닉 수분젤","usageGroup":"CORE_ROUTINE"},
+    {"id":"10000000-0000-0000-0000-000000000004","order":4,"displayOrder":4,"applicationOrder":null,"slot":"클렌저/리무버","usageGroup":"CLEANSE"},
+    {"id":"10000000-0000-0000-0000-000000000005","order":5,"displayOrder":5,"applicationOrder":null,"slot":"에센스/세럼","usageGroup":"TREATMENT"},
+    {"id":"10000000-0000-0000-0000-000000000006","order":6,"displayOrder":6,"applicationOrder":null,"slot":"선케어","usageGroup":"PROTECT"},
+    {"id":"10000000-0000-0000-0000-000000000007","order":7,"displayOrder":7,"applicationOrder":null,"slot":"마스크/팩","usageGroup":"OCCASIONAL"},
+    {"id":"10000000-0000-0000-0000-000000000008","order":8,"displayOrder":8,"applicationOrder":null,"slot":"미스트/특수케어","usageGroup":"OCCASIONAL"}
+  ]
+}

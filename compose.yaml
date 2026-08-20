@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-centralton}
+      POSTGRES_USER: ${POSTGRES_USER:-centralton}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-replace-me-before-use}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - centralton-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-centralton}
+      DB_USERNAME: ${POSTGRES_USER:-centralton}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-replace-me-before-use}
+      DEV_AUTH_ENABLED: ${DEV_AUTH_ENABLED:-false}
+      DEV_AUTH_HEADER_VALUE: ${DEV_AUTH_HEADER_VALUE:-}
+      GOOGLE_SERVER_CLIENT_ID: ${GOOGLE_SERVER_CLIENT_ID:-}
+      JWT_ISSUER: ${JWT_ISSUER:-centralton-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-centralton-mobile}
+      JWT_ACCESS_TTL_SECONDS: ${JWT_ACCESS_TTL_SECONDS:-900}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-30}
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:-}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:-}
+      JWT_KEY_ID: ${JWT_KEY_ID:-centralton-key}
+      AI_ANALYSIS_BASE_URL: ${AI_ANALYSIS_BASE_URL:-http://host.docker.internal:8001}
+      AI_RECOMMENDATION_BASE_URL: ${AI_RECOMMENDATION_BASE_URL:-http://host.docker.internal:8000}
+      AI_ANALYSIS_CONNECT_TIMEOUT: ${AI_ANALYSIS_CONNECT_TIMEOUT:-2s}
+      AI_ANALYSIS_READ_TIMEOUT: ${AI_ANALYSIS_READ_TIMEOUT:-30s}
+      AI_RECOMMENDATION_CONNECT_TIMEOUT: ${AI_RECOMMENDATION_CONNECT_TIMEOUT:-2s}
+      AI_RECOMMENDATION_READ_TIMEOUT: ${AI_RECOMMENDATION_READ_TIMEOUT:-10s}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      AI_CONNECT_TIMEOUT: ${AI_CONNECT_TIMEOUT:-2s}
+      AI_READ_TIMEOUT: ${AI_READ_TIMEOUT:-10s}
+      INTERNAL_CALLBACK_KEY: ${INTERNAL_CALLBACK_KEY:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8081}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${API_PORT:-8080}:8080"
+
+volumes:
+  centralton-postgres-data:

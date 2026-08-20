@@ -1,0 +1,5 @@
+{
+  "cnn_result": {"predicted_label":"normal","confidence":0.91,"top_k":[]},
+  "llm_result": {"summary":"mock summary","care_recommendations":[],"need_professional_care":false},
+  "survey": {"skin_type":1,"concerns":[4],"duration":1,"areas":[3],"irritation":1,"diagnosed":1}
+}

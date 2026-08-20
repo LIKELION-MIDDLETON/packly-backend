@@ -1,0 +1,85 @@
+name: Backend CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Check repository safety and diff hygiene
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: ./scripts/check-repository-safety.sh
+
+      - name: Validate production Compose and deployment scripts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          fixture_root="$(mktemp -d)"
+          mkdir -p "${fixture_root}/ai/model/checkpoints" "${fixture_root}/backend/deploy"
+          printf '%s\n' 'OPENAI_API_KEY=ci-placeholder' > "${fixture_root}/ai.env"
+          printf '%s\n' 'POSTGRES_PASSWORD=ci-only-placeholder' > "${fixture_root}/backend.env"
+          printf 'placeholder' > "${fixture_root}/ai/model/checkpoints/cnn_best.pt"
+          cp deploy/nginx.conf "${fixture_root}/backend/deploy/nginx.conf"
+          env_file="$(mktemp)"
+          trap 'rm -f "${env_file}"; rm -rf "${fixture_root}"' EXIT
+          printf '%s\n' \
+            "PACKLY_ROOT=${fixture_root}" \
+            'POSTGRES_DB=centralton' \
+            'POSTGRES_USER=centralton' \
+            'POSTGRES_PASSWORD=ci-only-placeholder' \
+            'S3_PHOTO_BUCKET=ci-only-bucket' \
+            'AWS_REGION=ap-southeast-2' > "${env_file}"
+          docker compose --env-file "${env_file}" -f deploy/compose.prod.yaml config --quiet
+          bash -n scripts/bootstrap-server.sh scripts/deploy-backend.sh scripts/check-repository-safety.sh
+          grep -Fq 'COPY checkpoints/class_names.json /app/checkpoints/class_names.json' deploy/Dockerfile.skin-analysis
+          grep -Fq 'client_max_body_size 12m;' deploy/nginx.conf
+          if awk '/^  postgres:/{in_postgres=1; next} /^  [a-z0-9-]+:/{in_postgres=0} in_postgres && /env_file:/{found=1} END{exit found ? 0 : 1}' deploy/compose.prod.yaml; then
+            echo 'PostgreSQL must not receive backend.env as an env_file.' >&2
+            exit 1
+          fi
+
+      - name: Verify deployment files are included in the revision
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git ls-files --error-unmatch \
+            deploy/Dockerfile.skin-analysis \
+            deploy/Dockerfile.recommend-api \
+            deploy/compose.prod.yaml \
+            deploy/nginx.conf \
+            deploy/requirements.recommend-api.constraints.txt \
+            scripts/bootstrap-server.sh \
+            scripts/deploy-backend.sh
+
+      - name: Run tests and build the application JAR
+        run: ./gradlew --no-daemon clean test bootJar
+
+      - name: Build backend container
+        run: docker build --tag packly-backend:ci .

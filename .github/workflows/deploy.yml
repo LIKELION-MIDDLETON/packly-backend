@@ -1,0 +1,235 @@
+name: Deploy backend to Packly
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref or commit SHA to deploy
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packly-production-backend
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      release_sha: ${{ steps.revision.outputs.release_sha }}
+
+    steps:
+      - name: Check out deployment revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
+
+      - name: Record immutable revision
+        id: revision
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          release_sha="$(git rev-parse HEAD)"
+          if ! git merge-base --is-ancestor "${release_sha}" origin/main; then
+            echo "Refusing to deploy a revision that is not contained in origin/main." >&2
+            exit 1
+          fi
+          echo "release_sha=${release_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Check repository safety and diff hygiene
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ steps.revision.outputs.release_sha }}
+        run: ./scripts/check-repository-safety.sh
+
+      - name: Validate production Compose and deployment scripts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          fixture_root="$(mktemp -d)"
+          mkdir -p "${fixture_root}/ai/model/checkpoints" "${fixture_root}/backend/deploy"
+          printf '%s\n' 'OPENAI_API_KEY=ci-placeholder' > "${fixture_root}/ai.env"
+          printf '%s\n' 'POSTGRES_PASSWORD=ci-only-placeholder' > "${fixture_root}/backend.env"
+          printf 'placeholder' > "${fixture_root}/ai/model/checkpoints/cnn_best.pt"
+          cp deploy/nginx.conf "${fixture_root}/backend/deploy/nginx.conf"
+          env_file="$(mktemp)"
+          trap 'rm -f "${env_file}"; rm -rf "${fixture_root}"' EXIT
+          printf '%s\n' \
+            "PACKLY_ROOT=${fixture_root}" \
+            'POSTGRES_DB=centralton' \
+            'POSTGRES_USER=centralton' \
+            'POSTGRES_PASSWORD=ci-only-placeholder' \
+            'S3_PHOTO_BUCKET=ci-only-bucket' \
+            'AWS_REGION=ap-southeast-2' > "${env_file}"
+          docker compose --env-file "${env_file}" -f deploy/compose.prod.yaml config --quiet
+          bash -n scripts/bootstrap-server.sh scripts/deploy-backend.sh scripts/check-repository-safety.sh
+          grep -Fq 'COPY checkpoints/class_names.json /app/checkpoints/class_names.json' deploy/Dockerfile.skin-analysis
+          grep -Fq 'client_max_body_size 12m;' deploy/nginx.conf
+          if awk '/^  postgres:/{in_postgres=1; next} /^  [a-z0-9-]+:/{in_postgres=0} in_postgres && /env_file:/{found=1} END{exit found ? 0 : 1}' deploy/compose.prod.yaml; then
+            echo 'PostgreSQL must not receive backend.env as an env_file.' >&2
+            exit 1
+          fi
+
+      - name: Run tests and build the application JAR
+        run: ./gradlew --no-daemon clean test bootJar
+
+      - name: Verify backend container build
+        run: docker build --tag packly-backend:${{ steps.revision.outputs.release_sha }} .
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out verified revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ needs.verify.outputs.release_sha }}
+
+      - name: Validate deployment configuration
+        env:
+          AWS_ROLE_ARN: ${{ vars.PACKLY_AWS_DEPLOY_ROLE_ARN }}
+          AWS_REGION: ${{ vars.PACKLY_AWS_REGION }}
+          DEPLOY_BUCKET: ${{ vars.PACKLY_DEPLOY_BUCKET }}
+          INSTANCE_ID: ${{ vars.PACKLY_INSTANCE_ID }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          for variable in AWS_ROLE_ARN AWS_REGION DEPLOY_BUCKET INSTANCE_ID; do
+            if [[ -z "${!variable:-}" ]]; then
+              echo "Required production variable is missing: ${variable}" >&2
+              exit 1
+            fi
+          done
+          [[ "${INSTANCE_ID}" =~ ^i-[0-9a-f]+$ ]] || {
+            echo 'PACKLY_INSTANCE_ID is invalid.' >&2
+            exit 1
+          }
+
+      - name: Configure short-lived AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.PACKLY_AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.PACKLY_AWS_REGION }}
+
+      - name: Package and upload immutable backend snapshot
+        env:
+          RELEASE_SHA: ${{ needs.verify.outputs.release_sha }}
+          AWS_REGION: ${{ vars.PACKLY_AWS_REGION }}
+          DEPLOY_BUCKET: ${{ vars.PACKLY_DEPLOY_BUCKET }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          archive="backend-${RELEASE_SHA}.tar.gz"
+          object_key="deploy/backend/${RELEASE_SHA}.tar.gz"
+          git archive --format=tar.gz --output="${archive}" "${RELEASE_SHA}"
+          aws s3 cp "${archive}" "s3://${DEPLOY_BUCKET}/${object_key}" \
+            --region "${AWS_REGION}" --only-show-errors
+
+      - name: Deploy through Systems Manager
+        env:
+          RELEASE_SHA: ${{ needs.verify.outputs.release_sha }}
+          AWS_REGION: ${{ vars.PACKLY_AWS_REGION }}
+          DEPLOY_BUCKET: ${{ vars.PACKLY_DEPLOY_BUCKET }}
+          INSTANCE_ID: ${{ vars.PACKLY_INSTANCE_ID }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          object_key="deploy/backend/${RELEASE_SHA}.tar.gz"
+          archive="/tmp/packly-backend-${RELEASE_SHA}.tar.gz"
+          deploy_script="/tmp/packly-deploy-backend-${RELEASE_SHA}.sh"
+          parameters="$(jq -cn \
+            --arg bucket "${DEPLOY_BUCKET}" \
+            --arg key "${object_key}" \
+            --arg archive "${archive}" \
+            --arg script "${deploy_script}" \
+            --arg sha "${RELEASE_SHA}" \
+            --arg region "${AWS_REGION}" \
+            '{commands:[
+              "#!/bin/bash",
+              "set -Eeuo pipefail",
+              ("aws s3 cp \"s3://" + $bucket + "/" + $key + "\" \"" + $archive + "\" --region \"" + $region + "\" --only-show-errors"),
+              ("tar -xOf \"" + $archive + "\" scripts/deploy-backend.sh > \"" + $script + "\""),
+              ("chmod 700 \"" + $script + "\""),
+              ("trap \"rm -f \\\"" + $archive + "\\\" \\\"" + $script + "\\\"\" EXIT"),
+              ("PACKLY_ROOT=/srv/packly RELEASE_SHA=\"" + $sha + "\" ARCHIVE_PATH=\"" + $archive + "\" \"" + $script + "\"")
+            ]}')"
+          command_id="$(aws ssm send-command \
+            --region "${AWS_REGION}" \
+            --instance-ids "${INSTANCE_ID}" \
+            --document-name AWS-RunShellScript \
+            --comment "Deploy Packly backend ${RELEASE_SHA}" \
+            --parameters "${parameters}" \
+            --query 'Command.CommandId' --output text)"
+          deadline=$((SECONDS + 1200))
+          while (( SECONDS < deadline )); do
+            invocation_status="$(aws ssm get-command-invocation \
+              --region "${AWS_REGION}" \
+              --command-id "${command_id}" \
+              --instance-id "${INSTANCE_ID}" \
+              --query 'Status' --output text 2>/dev/null || true)"
+            case "${invocation_status}" in
+              Success)
+                break
+                ;;
+              Failed|Cancelled|TimedOut|Cancelling)
+                break
+                ;;
+              Pending|InProgress|Delayed|'')
+                sleep 10
+                ;;
+              *)
+                echo "Unexpected SSM invocation status: ${invocation_status}" >&2
+                exit 1
+                ;;
+            esac
+          done
+          if [[ "${invocation_status:-}" != Success ]]; then
+            aws ssm get-command-invocation \
+              --region "${AWS_REGION}" \
+              --command-id "${command_id}" \
+              --instance-id "${INSTANCE_ID}" \
+              --query '{Status:Status,ResponseCode:ResponseCode}'
+            if (( SECONDS >= deadline )); then
+              echo 'Timed out waiting 20 minutes for the SSM deployment command.' >&2
+            fi
+            exit 1
+          fi
+
+      - name: Verify public health endpoint
+        env:
+          DEPLOY_HOST: ${{ vars.PACKLY_DEPLOY_HOST }}
+          HEALTHCHECK_URL: ${{ vars.PACKLY_HEALTHCHECK_URL }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          healthcheck_url="${HEALTHCHECK_URL:-http://${DEPLOY_HOST}/api/health}"
+          [[ -n "${healthcheck_url}" ]] || {
+            echo 'PACKLY_DEPLOY_HOST or PACKLY_HEALTHCHECK_URL is required.' >&2
+            exit 1
+          }
+          curl --fail --silent --show-error \
+            --retry 6 --retry-delay 5 --retry-all-errors \
+            --max-time 10 "${healthcheck_url}" >/dev/null
+          echo "Public backend health check passed."

@@ -1,0 +1,21 @@
+{
+  "id": "00000000-0000-0000-0000-000000000002",
+  "analysisId": "00000000-0000-0000-0000-000000000001",
+  "createdAt": "2026-08-20T00:00:05Z",
+  "diagnosis": "normal",
+  "headline": "기본 루틴",
+  "summary": "기본 관리",
+  "confidence": 0.91,
+  "triage": "NORMAL",
+  "medicalAdvice": {
+    "recommended": false,
+    "reasons": []
+  },
+  "reflectedSurvey": null,
+  "products": [],
+  "totalPrice": 0,
+  "totalPriceDaily": 0,
+  "analysisSummary": null,
+  "careRecommendations": [],
+  "disclaimer": null
+}

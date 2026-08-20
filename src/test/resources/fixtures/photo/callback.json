@@ -1,0 +1,5 @@
+{
+  "sourceResultId": "fixture-source-1",
+  "cnnResult": {"predicted_label":"normal","confidence":0.91,"top_k":[]},
+  "llmResult": {"summary":"mock summary","care_recommendations":[],"need_professional_care":false}
+}

@@ -1,0 +1,12 @@
+# Direct runtime pins for the recommendation service.
+# Transitive dependencies remain resolver-managed so compatible platform wheels
+# can be selected for Python 3.11/Linux; application-level packages are fixed.
+fastapi==0.141.1
+uvicorn==0.52.4
+pydantic==2.13.4
+numpy==2.4.6
+pandas==2.3.3
+lightgbm==4.6.0
+scikit-learn==1.7.2
+openai==3.3.1
+python-dotenv==1.2.3

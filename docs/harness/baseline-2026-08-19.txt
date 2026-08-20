@@ -1,0 +1,14 @@
+Captured before Centralton backend MVP implementation.
+
+Environment:
+- Java: OpenJDK 17.0.19
+- Gradle: 9.5.1
+- Spring Boot: 4.1.0
+- OS: macOS 26.5.1 aarch64
+
+Baseline verification:
+- Command: ./gradlew test
+- Result: BUILD SUCCESSFUL
+- Tasks: 4 up-to-date
+
+The adjacent AI and frontend directories are outside the write scope.

@@ -1,0 +1,9 @@
+{
+  "id": "00000000-0000-0000-0000-000000000001",
+  "status": "FAILED",
+  "budgetTotal": 50000,
+  "failureCode": "AI_ANALYSIS_SERVER_ERROR",
+  "createdAt": "2026-08-20T00:00:00Z",
+  "updatedAt": "2026-08-20T00:00:04Z",
+  "recommendationId": null
+}

@@ -1,0 +1,152 @@
+name: packly
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-centralton}
+      POSTGRES_USER: ${POSTGRES_USER:-centralton}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    cpus: "0.75"
+    mem_limit: 1g
+    mem_reservation: 256m
+    logging: *default-logging
+    restart: unless-stopped
+    networks: [private]
+
+  skin-analysis:
+    build:
+      context: ${PACKLY_ROOT:-/srv/packly}/ai/model
+      dockerfile: ${PACKLY_ROOT:-/srv/packly}/backend/deploy/Dockerfile.skin-analysis
+    command:
+      - sh
+      - -c
+      - >-
+        python -c 'from PIL import Image; from cnn_infer import SkinCNNPredictor;
+        SkinCNNPredictor().predict(Image.new("RGB", (224, 224), "white"), top_k=1);
+        open("/tmp/packly-ai-preflight.ok", "w").close()'
+        && exec uvicorn server:app --host 0.0.0.0 --port 8001 --workers 1
+    env_file:
+      - ${PACKLY_ROOT:-/srv/packly}/ai.env
+    volumes:
+      - ${PACKLY_ROOT:-/srv/packly}/ai/model/checkpoints/cnn_best.pt:/app/checkpoints/cnn_best.pt:ro
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/packly-ai-preflight.ok && python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8001/health\", timeout=3)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    cpus: "1.25"
+    mem_limit: 3g
+    mem_reservation: 1g
+    logging: *default-logging
+    networks: [private]
+
+  recommend-api:
+    build:
+      context: ${PACKLY_ROOT:-/srv/packly}/backend
+      dockerfile: ${PACKLY_ROOT:-/srv/packly}/backend/deploy/Dockerfile.recommend-api
+      additional_contexts:
+        ai: ${PACKLY_ROOT:-/srv/packly}/ai
+    env_file:
+      - ${PACKLY_ROOT:-/srv/packly}/ai.env
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cpus: "0.75"
+    mem_limit: 1536m
+    mem_reservation: 512m
+    logging: *default-logging
+    networks: [private]
+
+  api:
+    build:
+      context: ${PACKLY_ROOT:-/srv/packly}/backend
+    env_file:
+      - ${PACKLY_ROOT:-/srv/packly}/backend.env
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-centralton}
+      DB_USERNAME: ${POSTGRES_USER:-centralton}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      AI_ANALYSIS_BASE_URL: http://skin-analysis:8001
+      AI_RECOMMENDATION_BASE_URL: http://recommend-api:8000
+      PHOTO_STORAGE_MODE: ${PHOTO_STORAGE_MODE:-s3}
+      AWS_REGION: ${AWS_REGION:-ap-southeast-2}
+      S3_PHOTO_BUCKET: ${S3_PHOTO_BUCKET:?S3_PHOTO_BUCKET is required}
+      S3_PHOTO_PREFIX: ${S3_PHOTO_PREFIX:-photos}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      skin-analysis:
+        condition: service_healthy
+      recommend-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cpus: "1.00"
+    mem_limit: 1536m
+    mem_reservation: 768m
+    logging: *default-logging
+    networks: [edge, private]
+
+  proxy:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ${PACKLY_ROOT:-/srv/packly}/backend/deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+    cpus: "0.25"
+    mem_limit: 128m
+    mem_reservation: 32m
+    logging: *default-logging
+    networks: [edge]
+
+volumes:
+  postgres-data:
+
+networks:
+  edge:
+    driver: bridge
+  private:
+    driver: bridge
