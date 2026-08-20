@@ -1,0 +1,10 @@
+{$PACKLY_PUBLIC_HOST} {
+    respond /healthz "ok\n" 200
+
+    reverse_proxy api:8080 {
+        transport http {
+            dial_timeout 5s
+            response_header_timeout 120s
+        }
+    }
+}

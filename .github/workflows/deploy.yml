@@ -66,7 +66,7 @@ jobs:
           printf '%s\n' 'OPENAI_API_KEY=ci-placeholder' > "${fixture_root}/ai.env"
           printf '%s\n' 'POSTGRES_PASSWORD=ci-only-placeholder' > "${fixture_root}/backend.env"
           printf 'placeholder' > "${fixture_root}/ai/model/checkpoints/cnn_best.pt"
-          cp deploy/nginx.conf "${fixture_root}/backend/deploy/nginx.conf"
+          cp deploy/Caddyfile "${fixture_root}/backend/deploy/Caddyfile"
           env_file="$(mktemp)"
           trap 'rm -f "${env_file}"; rm -rf "${fixture_root}"' EXIT
           printf '%s\n' \
@@ -75,11 +75,12 @@ jobs:
             'POSTGRES_USER=centralton' \
             'POSTGRES_PASSWORD=ci-only-placeholder' \
             'S3_PHOTO_BUCKET=ci-only-bucket' \
-            'AWS_REGION=ap-southeast-2' > "${env_file}"
+            'AWS_REGION=ap-southeast-2' \
+            'PACKLY_PUBLIC_HOST=api.example.com' > "${env_file}"
           docker compose --env-file "${env_file}" -f deploy/compose.prod.yaml config --quiet
           bash -n scripts/bootstrap-server.sh scripts/deploy-backend.sh scripts/check-repository-safety.sh
           grep -Fq 'COPY checkpoints/class_names.json /app/checkpoints/class_names.json' deploy/Dockerfile.skin-analysis
-          grep -Fq 'client_max_body_size 12m;' deploy/nginx.conf
+          grep -Fq 'response_header_timeout 120s' deploy/Caddyfile
           if awk '/^  postgres:/{in_postgres=1; next} /^  [a-z0-9-]+:/{in_postgres=0} in_postgres && /env_file:/{found=1} END{exit found ? 0 : 1}' deploy/compose.prod.yaml; then
             echo 'PostgreSQL must not receive backend.env as an env_file.' >&2
             exit 1

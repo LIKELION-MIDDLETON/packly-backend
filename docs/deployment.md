@@ -56,7 +56,13 @@ Reconnect after bootstrap so Docker group membership takes effect. The script in
 
 Populate `/srv/packly/backend.env` and `/srv/packly/ai.env` directly on the server. Before the first backend deployment, place the AI source and `cnn_best.pt` under `/srv/packly/ai`. The first managed backend release starts PostgreSQL, both AI services, Spring, and Nginx together after validating the Compose configuration.
 
-The backend environment must include the following non-secret S3 selectors in addition to its database, JWT, Google, and AI settings:
+The backend environment must include the following non-secret public host and S3 selectors in addition to its database, JWT, Google, and AI settings:
+
+```dotenv
+PACKLY_PUBLIC_HOST=api.example.com
+```
+
+Caddy obtains and renews the TLS certificate for this hostname and exposes only ports 80/443. The hostname must resolve to the EC2 public IP before the proxy starts.
 
 ```dotenv
 PHOTO_STORAGE_MODE=s3
