@@ -9,9 +9,14 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.io.InputStream;
+import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+
+import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -54,6 +59,36 @@ class FastApiRecommendationAdapterTest {
         assertThat(exchange.result().reflectedSurvey().get("skinType").asText()).isEqualTo("건성");
         assertThat(exchange.result().reflectedSurvey().has("피부타입")).isFalse();
         server.verify();
+    }
+
+    @Test
+    void productionHttpClientDoesNotAttemptAnH2cUpgrade() throws Exception {
+        AtomicReference<String> upgrade = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/recommend", exchange -> {
+            upgrade.set(exchange.getRequestHeaders().getFirst("Upgrade"));
+            exchange.getRequestBody().readAllBytes();
+            byte[] body = response(0).getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            FastApiRecommendationAdapter adapter = new FastApiRecommendationAdapter(
+                    objectMapper,
+                    "http://127.0.0.1:" + server.getAddress().getPort(),
+                    Duration.ofSeconds(2),
+                    Duration.ofSeconds(2));
+
+            adapter.recommend(request());
+
+            assertThat(upgrade.get()).isNull();
+        } finally {
+            server.stop(0);
+        }
     }
 
     @Test

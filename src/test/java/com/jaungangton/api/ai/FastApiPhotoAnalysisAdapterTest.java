@@ -7,6 +7,12 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import java.net.SocketTimeoutException;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
+
+import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -44,6 +50,49 @@ class FastApiPhotoAnalysisAdapterTest {
         assertThat(result.llmResult().get("summary").asText()).isEqualTo("summary");
         assertThat(result.survey().get("skin_type").asInt()).isEqualTo(1);
         server.verify();
+    }
+
+    @Test
+    void productionHttpClientSendsAFastApiCompatibleMultipartBody() throws Exception {
+        AtomicReference<String> contentType = new AtomicReference<>();
+        AtomicReference<String> upgrade = new AtomicReference<>();
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/analyze", exchange -> {
+            contentType.set(exchange.getRequestHeaders().getFirst("Content-Type"));
+            upgrade.set(exchange.getRequestHeaders().getFirst("Upgrade"));
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.ISO_8859_1));
+            byte[] response = """
+                    {"cnn_result":{"predicted_label":"normal","confidence":0.91,"top_k":[]},
+                     "llm_result":null,"survey":null}
+                    """.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            FastApiPhotoAnalysisAdapter adapter = new FastApiPhotoAnalysisAdapter(
+                    objectMapper,
+                    "http://127.0.0.1:" + server.getAddress().getPort(),
+                    Duration.ofSeconds(2),
+                    Duration.ofSeconds(2));
+
+            adapter.analyze(new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47}, "image/png",
+                    "{\"skin_type\":\"건성\"}", 8);
+
+            assertThat(contentType.get()).startsWith("multipart/form-data;boundary=");
+            assertThat(upgrade.get()).isNull();
+            assertThat(requestBody.get())
+                    .contains("Content-Disposition: form-data; name=\"image\"; filename=\"photo-upload\"")
+                    .contains("Content-Type: image/png")
+                    .contains("Content-Disposition: form-data; name=\"answers\"")
+                    .contains("Content-Disposition: form-data; name=\"top_k\"");
+        } finally {
+            server.stop(0);
+        }
     }
 
     @Test

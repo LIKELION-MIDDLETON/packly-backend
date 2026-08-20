@@ -36,7 +36,10 @@ public class FastApiPhotoAnalysisAdapter implements PhotoAnalysisPort {
             @Value("${centralton.ai.analysis-base-url}") String baseUrl,
             @Value("${centralton.ai.analysis-connect-timeout:2s}") Duration connectTimeout,
             @Value("${centralton.ai.analysis-read-timeout:30s}") Duration readTimeout) {
-        HttpClient httpClient = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
+        HttpClient httpClient = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(connectTimeout)
+                .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(readTimeout);
         this.restClient = RestClient.builder().baseUrl(baseUrl).requestFactory(requestFactory).build();
