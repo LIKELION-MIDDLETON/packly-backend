@@ -163,6 +163,24 @@ class PhotoRecommendationPollingIntegrationTest {
     }
 
     @Test
+    void completedUserCanRunAnotherPhotoAnalysis() throws Exception {
+        String accessToken = loginAndCompleteSurvey();
+
+        UUID firstAnalysisId = createAnalysis(accessToken, "repeat-analysis-first");
+        uploadPhoto(accessToken, firstAnalysisId);
+        pollUntilCompleted(accessToken, firstAnalysisId);
+
+        UUID secondAnalysisId = createAnalysis(accessToken, "repeat-analysis-second");
+        uploadPhoto(accessToken, secondAnalysisId);
+        String completed = pollUntilCompleted(accessToken, secondAnalysisId);
+
+        assertThat((String) JsonPath.read(completed, "$.status")).isEqualTo("COMPLETED");
+        assertThat((String) JsonPath.read(completed, "$.recommendationId")).isNotBlank();
+        verify(photoAnalysisPort, times(2)).analyze(any(byte[].class), eq("image/jpeg"), anyString(), eq(8));
+        verify(recommendationPort, times(2)).recommend(any());
+    }
+
+    @Test
     void rejectsAnalysisUploadAndPollingForAnotherUserWithNotFound() throws Exception {
         String ownerToken = loginAndCompleteSurvey();
         String created = mockMvc.perform(post("/api/v1/analyses")
@@ -412,6 +430,26 @@ class PhotoRecommendationPollingIntegrationTest {
                                 """))
                 .andExpect(status().isOk());
         return accessToken;
+    }
+
+    private UUID createAnalysis(String accessToken, String idempotencyKey) throws Exception {
+        String created = mockMvc.perform(post("/api/v1/analyses")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", idempotencyKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isAccepted())
+                .andReturn().getResponse().getContentAsString();
+        return UUID.fromString(JsonPath.read(created, "$.id"));
+    }
+
+    private void uploadPhoto(String accessToken, UUID analysisId) throws Exception {
+        mockMvc.perform(multipart("/api/v1/analyses/{id}/photo", analysisId)
+                        .file(new MockMultipartFile("image", "face.jpg", "image/jpeg",
+                                new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff, 0x00}))
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.status").value("ANALYZING"));
     }
 
     private String pollUntilCompleted(String accessToken, UUID analysisId) throws Exception {

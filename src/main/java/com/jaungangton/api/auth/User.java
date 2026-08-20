@@ -79,6 +79,7 @@ public class User {
 
     void advanceOnboarding(OnboardingStatus target, Instant now) {
         if (target == onboardingStatus) return;
+        if (onboardingStatus == OnboardingStatus.COMPLETED) return;
         if (!onboardingStatus.canTransitionTo(target)) {
             throw new IllegalStateException("Invalid onboarding transition: " + onboardingStatus + " -> " + target);
         }
