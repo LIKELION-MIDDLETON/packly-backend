@@ -73,6 +73,22 @@ class RecommendationQueryServiceTest {
             assertThat(product.productUrl()).endsWith("goodsNo=A0001");
             assertThat(product.suitability().get("lowIrritation").asDouble()).isEqualTo(68.0);
         });
+        assertThat(response.purchaseOptions()).isEmpty();
+    }
+
+    @Test
+    void mapperBuildsTwoAndFourWeekPurchaseOptionsFromTheAiDailyTotal() {
+        UUID userId = UUID.randomUUID();
+        Recommendation recommendation = new Recommendation(
+                UUID.randomUUID(), UUID.randomUUID(), userId, "normal", "headline", "summary", 0.9,
+                "normal", false, "[]", null, 0L, 4286L, null, "[]", null, "{}", "{}",
+                Instant.parse("2026-08-19T00:00:00Z"));
+
+        RecommendationResultResponse response = new RecommendationMapper(new ObjectMapper()).toResponse(recommendation);
+
+        assertThat(response.purchaseOptions()).containsExactly(
+                new RecommendationPurchaseOptionResponse(14, "2주", 60004L),
+                new RecommendationPurchaseOptionResponse(28, "4주", 120008L));
     }
 
     private Recommendation entity(UUID userId, UUID id) {

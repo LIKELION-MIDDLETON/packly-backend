@@ -26,5 +26,6 @@ public record RecommendationProductResponse(
         String functionalInfo,
         boolean unscented,
         int comedogenicScore,
-        String productUrl) {
+        String productUrl,
+        String imageUrl) {
 }

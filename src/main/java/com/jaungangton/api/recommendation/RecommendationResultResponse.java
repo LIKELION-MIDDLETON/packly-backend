@@ -21,6 +21,7 @@ public record RecommendationResultResponse(
         /** Deprecated purchase-total alias; null when the legacy total is unavailable. */
         Long totalPrice,
         Long totalPriceDaily,
+        List<RecommendationPurchaseOptionResponse> purchaseOptions,
         String analysisSummary,
         List<String> careRecommendations,
         String disclaimer) {

@@ -31,9 +31,27 @@ class RecommendationMapper {
                 new MedicalAdviceResponse(recommendation.medicalRecommended(),
                         stringList(recommendation.medicalReasons())),
                 json(recommendation.reflectedSurvey()), products, recommendation.totalPrice(),
-                recommendation.totalPriceDaily(), recommendation.analysisSummary(),
+                recommendation.totalPriceDaily(), purchaseOptions(recommendation.totalPriceDaily()),
+                recommendation.analysisSummary(),
                 stringList(recommendation.careRecommendations()),
                 recommendation.disclaimer());
+    }
+
+    private List<RecommendationPurchaseOptionResponse> purchaseOptions(Long dailyTotal) {
+        if (dailyTotal == null) {
+            return List.of();
+        }
+        return List.of(
+                purchaseOption(14, "2주", dailyTotal),
+                purchaseOption(28, "4주", dailyTotal));
+    }
+
+    private RecommendationPurchaseOptionResponse purchaseOption(int days, String label, long dailyTotal) {
+        try {
+            return new RecommendationPurchaseOptionResponse(days, label, Math.multiplyExact(dailyTotal, days));
+        } catch (ArithmeticException exception) {
+            return new RecommendationPurchaseOptionResponse(days, label, null);
+        }
     }
 
     private RecommendationProductResponse toResponse(RecommendationProduct product) {
@@ -43,7 +61,7 @@ class RecommendationMapper {
                 product.price(), product.dailyPrice(), product.dailyVolume(), product.totalVolume(),
                 product.salePrice(), product.recommendationReason(), json(product.suitability()),
                 product.suitabilitySource(), product.functionalInfo(), product.unscented(),
-                product.comedogenicScore(), PRODUCT_URL + product.goodsNo());
+                product.comedogenicScore(), PRODUCT_URL + product.goodsNo(), product.imageUrl());
     }
 
     private JsonNode json(String value) {

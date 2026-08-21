@@ -23,12 +23,15 @@ class RecommendationPublicFixtureTest {
             assertThat(fieldNames(root)).containsExactlyInAnyOrder(
                     "id", "analysisId", "createdAt", "diagnosis", "headline", "summary",
                     "confidence", "triage", "medicalAdvice", "reflectedSurvey", "products",
-                    "totalPrice", "totalPriceDaily", "analysisSummary", "careRecommendations", "disclaimer");
+                    "totalPrice", "totalPriceDaily", "purchaseOptions", "analysisSummary",
+                    "careRecommendations", "disclaimer");
             assertThat(root.path("products").isArray()).isTrue();
             assertThat(root.path("products")).isEmpty();
             assertThat(root.path("medicalAdvice").path("recommended").asBoolean()).isFalse();
             assertThat(root.path("medicalAdvice").path("reasons").isArray()).isTrue();
             assertThat(root.path("totalPriceDaily").asLong()).isZero();
+            assertThat(root.path("purchaseOptions")).hasSize(2);
+            assertThat(root.path("purchaseOptions").get(0).path("totalPrice").asLong()).isZero();
             assertThat(root.toString()).doesNotContain(
                     "dailyPrice", "dailyVolume", "totalVolume", "salePrice", "recommendationReason",
                     "listPrice", "usage", "capacity");
@@ -48,10 +51,16 @@ class RecommendationPublicFixtureTest {
             assertThat(first.path("dailyPrice").asLong()).isEqualTo(1000L);
             assertThat(first.path("salePrice").asLong()).isEqualTo(10000L);
             assertThat(first.path("applicationOrder").asInt()).isEqualTo(1);
+            assertThat(first.path("imageUrl").asText())
+                    .isEqualTo("https://example.test/images/A1.jpg");
             assertThat(protect.path("dailyPrice").isNull()).isTrue();
             assertThat(protect.path("applicationOrder").isNull()).isTrue();
             assertThat(protect.path("usageGroup").asText()).isEqualTo("PROTECT");
             assertThat(root.path("totalPriceDaily").asLong()).isEqualTo(4286L);
+            assertThat(root.path("purchaseOptions").get(0).path("durationDays").asInt()).isEqualTo(14);
+            assertThat(root.path("purchaseOptions").get(0).path("totalPrice").asLong()).isEqualTo(60004L);
+            assertThat(root.path("purchaseOptions").get(1).path("durationDays").asInt()).isEqualTo(28);
+            assertThat(root.path("purchaseOptions").get(1).path("totalPrice").asLong()).isEqualTo(120008L);
             assertThat(root.toString()).doesNotContain(
                     "dailyVolumePerDay", "totalVolumeMl", "listPrice", "capacity");
         }

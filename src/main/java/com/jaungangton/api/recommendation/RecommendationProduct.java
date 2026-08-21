@@ -48,6 +48,8 @@ public class RecommendationProduct {
     private Long salePrice;
     @Column(name = "recommendation_reason", columnDefinition = "TEXT")
     private String recommendationReason;
+    @Column(name = "image_url", length = 2048)
+    private String imageUrl;
     @Column(columnDefinition = "TEXT")
     private String suitability;
     @Column(name = "suitability_source", length = 32)
@@ -75,6 +77,16 @@ public class RecommendationProduct {
             String usageGroup, String slot, String goodsNo, String brand, String name, Long price, String suitability,
             String suitabilitySource, String functionalInfo, boolean unscented, int comedogenicScore,
             Long dailyPrice, String dailyVolume, String totalVolume, Long salePrice, String recommendationReason) {
+        this(id, recommendation, displayOrder, applicationOrder, usageGroup, slot, goodsNo, brand, name, price,
+                suitability, suitabilitySource, functionalInfo, unscented, comedogenicScore, dailyPrice, dailyVolume,
+                totalVolume, salePrice, recommendationReason, null);
+    }
+
+    RecommendationProduct(UUID id, Recommendation recommendation, int displayOrder, Integer applicationOrder,
+            String usageGroup, String slot, String goodsNo, String brand, String name, Long price, String suitability,
+            String suitabilitySource, String functionalInfo, boolean unscented, int comedogenicScore,
+            Long dailyPrice, String dailyVolume, String totalVolume, Long salePrice, String recommendationReason,
+            String imageUrl) {
         this.id = id;
         this.recommendation = recommendation;
         this.orderIndex = (short) displayOrder;
@@ -96,6 +108,7 @@ public class RecommendationProduct {
         this.totalVolume = totalVolume;
         this.salePrice = salePrice;
         this.recommendationReason = recommendationReason;
+        this.imageUrl = imageUrl;
     }
 
     /** Legacy constructor for the pre-PR#9 product contract. */
@@ -123,6 +136,7 @@ public class RecommendationProduct {
     public String totalVolume() { return totalVolume; }
     public Long salePrice() { return salePrice; }
     public String recommendationReason() { return recommendationReason; }
+    public String imageUrl() { return imageUrl; }
     public String suitability() { return suitability; }
     public String suitabilitySource() { return suitabilitySource; }
     public String functionalInfo() { return functionalInfo; }

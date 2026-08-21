@@ -166,6 +166,9 @@ DB는 기존 8번 슬롯 및 후속 추가를 안전하게 수용하기 위해 0
 - `totalVolume`: nullable 전체용량 문자열. `salePrice`: nullable 판매가.
 - `recommendationReason`: nullable 추천이유. `price`는 deprecated 판매가 호환 alias이며
   `dailyPrice`로 채우지 않습니다.
+- `imageUrl`: nullable 상품 미리보기 URL. 추천 생성 시 카카오 이미지 검색을 통해 한 번 조회하여
+  저장하며, `KAKAO_REST_API_KEY` 누락·검색 실패·시간 초과 시 null입니다. 이미지 조회 실패는 추천
+  생성을 실패시키지 않습니다.
 
 추천 응답은 0개 제품도 정상이며 전체 제품을 하나의 공통 도포 순서로 렌더링해서는 안 됩니다.
 예산 `budgetTotal`은 현재 AI 엔진에서 7개 슬롯 기준 슬롯별 상한(`budget_total / 7`)으로
@@ -185,9 +188,16 @@ medicalAdvice { recommended, reasons[] }, reflectedSurvey,
 products[] { id, order(deprecated), displayOrder, applicationOrder, slot, usageGroup,
              goodsNo, brand, name, price(deprecated), dailyPrice, dailyVolume, totalVolume,
              salePrice, recommendationReason, suitability,
-             suitabilitySource, functionalInfo, unscented, comedogenicScore, productUrl },
-totalPrice(deprecated), totalPriceDaily, analysisSummary, careRecommendations[], disclaimer
+             suitabilitySource, functionalInfo, unscented, comedogenicScore, productUrl, imageUrl },
+totalPrice(deprecated), totalPriceDaily,
+purchaseOptions[] { durationDays, label, totalPrice },
+analysisSummary, careRecommendations[], disclaimer
 ```
+
+`purchaseOptions`는 AI가 제공한 `totalPriceDaily`를 기준으로 생성한 가상 맞춤 키트 결제 옵션입니다.
+`[{ durationDays: 14, label: "2주", totalPrice }, { durationDays: 28, label: "4주", totalPrice }]`
+형태이며, 금액은 각각 일일 예상 총액의 14배·28배입니다. `totalPriceDaily`가 null이면 빈 배열이고,
+실제 주문·결제·배송 계약은 포함하지 않습니다.
 
 이력 응답은 `{ "items": [...], "nextCursor": "... 또는 null" }`입니다.
 

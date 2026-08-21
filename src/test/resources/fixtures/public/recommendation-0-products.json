@@ -15,6 +15,10 @@
   "products": [],
   "totalPrice": 0,
   "totalPriceDaily": 0,
+  "purchaseOptions": [
+    { "durationDays": 14, "label": "2주", "totalPrice": 0 },
+    { "durationDays": 28, "label": "4주", "totalPrice": 0 }
+  ],
   "analysisSummary": null,
   "careRecommendations": [],
   "disclaimer": null

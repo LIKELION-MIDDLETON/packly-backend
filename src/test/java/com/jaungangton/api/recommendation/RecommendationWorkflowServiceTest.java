@@ -109,6 +109,7 @@ class RecommendationWorkflowServiceTest {
         return new RecommendationResultResponse(
                 UUID.randomUUID(), work(false).analysisId(), Instant.parse("2026-08-19T00:00:00Z"),
                 "normal", "headline", "summary", 0.9, "normal",
-                new MedicalAdviceResponse(false, List.of()), null, List.of(), 0L, null, null, List.of(), null);
+                new MedicalAdviceResponse(false, List.of()), null, List.of(), 0L, null, List.of(), null,
+                List.of(), null);
     }
 }

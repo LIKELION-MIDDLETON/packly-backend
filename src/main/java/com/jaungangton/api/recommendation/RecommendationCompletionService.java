@@ -22,6 +22,7 @@ public class RecommendationCompletionService {
     private final RecommendationRepository repository;
     private final RecommendationMapper mapper;
     private final AnalysisResultAcceptanceService analysisService;
+    private final ProductImageProvider productImageProvider;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
@@ -29,11 +30,13 @@ public class RecommendationCompletionService {
             RecommendationRepository repository,
             RecommendationMapper mapper,
             AnalysisResultAcceptanceService analysisService,
+            ProductImageProvider productImageProvider,
             ObjectMapper objectMapper,
             Clock clock) {
         this.repository = repository;
         this.mapper = mapper;
         this.analysisService = analysisService;
+        this.productImageProvider = productImageProvider;
         this.objectMapper = objectMapper;
         this.clock = clock;
     }
@@ -58,11 +61,20 @@ public class RecommendationCompletionService {
                     product.brand(), product.name(), product.price(), nullableJson(product.suitability()),
                     product.suitabilitySource(), product.functionalInfo(), product.unscented(),
                     product.comedogenicScore(), product.dailyPrice(), product.dailyVolume(),
-                    product.totalVolume(), product.salePrice(), product.recommendationReason()));
+                    product.totalVolume(), product.salePrice(), product.recommendationReason(),
+                    productImageUrl(product.brand(), product.name())));
         }
         Recommendation saved = repository.save(recommendation);
         analysisService.markCompleted(work.analysisId());
         return mapper.toResponse(saved);
+    }
+
+    private String productImageUrl(String brand, String name) {
+        try {
+            return productImageProvider.findImageUrl(brand, name).orElse(null);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
     }
 
     private String nullableJson(JsonNode value) {

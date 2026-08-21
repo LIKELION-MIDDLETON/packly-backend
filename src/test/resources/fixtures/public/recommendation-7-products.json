@@ -34,7 +34,8 @@
       "functionalInfo": null,
       "unscented": true,
       "comedogenicScore": 0,
-      "productUrl": "https://example.test/A1"
+      "productUrl": "https://example.test/A1",
+      "imageUrl": "https://example.test/images/A1.jpg"
     },
     {
       "id": "10000000-0000-0000-0000-000000000002",
@@ -57,7 +58,8 @@
       "functionalInfo": null,
       "unscented": true,
       "comedogenicScore": 0,
-      "productUrl": "https://example.test/A2"
+      "productUrl": "https://example.test/A2",
+      "imageUrl": "https://example.test/images/A2.jpg"
     },
     {
       "id": "10000000-0000-0000-0000-000000000003",
@@ -80,7 +82,8 @@
       "functionalInfo": null,
       "unscented": true,
       "comedogenicScore": 0,
-      "productUrl": "https://example.test/A3"
+      "productUrl": "https://example.test/A3",
+      "imageUrl": "https://example.test/images/A3.jpg"
     },
     {
       "id": "10000000-0000-0000-0000-000000000004",
@@ -103,7 +106,8 @@
       "functionalInfo": null,
       "unscented": true,
       "comedogenicScore": 0,
-      "productUrl": "https://example.test/A4"
+      "productUrl": "https://example.test/A4",
+      "imageUrl": "https://example.test/images/A4.jpg"
     },
     {
       "id": "10000000-0000-0000-0000-000000000005",
@@ -126,7 +130,8 @@
       "functionalInfo": null,
       "unscented": true,
       "comedogenicScore": 0,
-      "productUrl": "https://example.test/A5"
+      "productUrl": "https://example.test/A5",
+      "imageUrl": "https://example.test/images/A5.jpg"
     },
     {
       "id": "10000000-0000-0000-0000-000000000006",
@@ -149,7 +154,8 @@
       "functionalInfo": null,
       "unscented": true,
       "comedogenicScore": 0,
-      "productUrl": "https://example.test/A6"
+      "productUrl": "https://example.test/A6",
+      "imageUrl": "https://example.test/images/A6.jpg"
     },
     {
       "id": "10000000-0000-0000-0000-000000000007",
@@ -172,11 +178,16 @@
       "functionalInfo": null,
       "unscented": true,
       "comedogenicScore": 0,
-      "productUrl": "https://example.test/A7"
+      "productUrl": "https://example.test/A7",
+      "imageUrl": "https://example.test/images/A7.jpg"
     }
   ],
   "totalPrice": 70000,
   "totalPriceDaily": 4286,
+  "purchaseOptions": [
+    { "durationDays": 14, "label": "2주", "totalPrice": 60004 },
+    { "durationDays": 28, "label": "4주", "totalPrice": 120008 }
+  ],
   "analysisSummary": null,
   "careRecommendations": [],
   "disclaimer": null

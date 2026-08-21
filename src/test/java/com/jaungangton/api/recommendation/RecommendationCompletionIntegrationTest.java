@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.jaungangton.api.ai.AiRecommendationExchange;
@@ -56,6 +57,7 @@ class RecommendationCompletionIntegrationTest {
 
     @MockitoBean GoogleTokenVerifierPort googleVerifier;
     @MockitoBean AiRecommendationPort aiPort;
+    @MockitoBean ProductImageProvider productImageProvider;
 
     @BeforeEach
     void setUp() {
@@ -69,6 +71,8 @@ class RecommendationCompletionIntegrationTest {
                         "other-google-sub", "other@example.com", true,
                         "Other User", null));
         when(aiPort.recommend(any())).thenReturn(exchange());
+        when(productImageProvider.findImageUrl("Brand", "Lotion"))
+                .thenReturn(Optional.of("https://search.example.test/lotion.jpg"));
     }
 
     @AfterEach
@@ -130,6 +134,8 @@ class RecommendationCompletionIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.analysisId").value(analysisId.toString()))
                 .andExpect(jsonPath("$.products.length()").value(1))
+                .andExpect(jsonPath("$.products[0].imageUrl")
+                        .value("https://search.example.test/lotion.jpg"))
                 .andReturn().getResponse().getContentAsString();
         UUID recommendationId = UUID.fromString(JsonPath.read(recommendationJson, "$.id"));
         UUID productId = UUID.fromString(JsonPath.read(recommendationJson, "$.products[0].id"));
@@ -146,6 +152,9 @@ class RecommendationCompletionIntegrationTest {
         assertThat(recommendations.findByAnalysisId(analysisId)).isPresent();
         assertThat(recommendations.count()).isOne();
         assertThat(products.count()).isOne();
+        assertThat(jdbc.queryForObject(
+                "select image_url from recommendation_products where id = ?", String.class, productId))
+                .isEqualTo("https://search.example.test/lotion.jpg");
 
         mockMvc.perform(post("/api/v1/internal/analyses/{id}/cnn-result", analysisId)
                         .header("X-Internal-Callback-Key", "test-internal-callback-key")
